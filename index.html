@@ -335,6 +335,85 @@
         .status-msg.success { color: var(--color-safe); }
         .status-msg.error { color: var(--color-danger); }
 
+        /* ── Location Toggle ── */
+        .location-toggle {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .loc-toggle-btn {
+            flex: 1;
+            padding: 0.6rem 0.75rem;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .loc-toggle-btn:hover { border-color: var(--border-light); color: var(--text-secondary); }
+        .loc-toggle-btn.active-westport { border-color: #6366f1; color: #818cf8; background: rgba(99,102,241,0.1); }
+        .loc-toggle-btn.active-zorn { border-color: #14b8a6; color: #2dd4bf; background: rgba(20,184,166,0.1); }
+
+        .location-fields {
+            animation: fadeSlide 0.2s ease-out;
+        }
+
+        @keyframes fadeSlide {
+            from { opacity: 0; transform: translateY(-4px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .loc-fields-header {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.6rem;
+            padding-bottom: 0.35rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .loc-fields-header.westport { color: #818cf8; border-color: rgba(99,102,241,0.3); }
+        .loc-fields-header.zorn { color: #2dd4bf; border-color: rgba(20,184,166,0.3); }
+
+        /* ── Flow Fetch ── */
+        .flow-input-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .flow-input-row input { flex: 1; }
+
+        .btn-fetch {
+            padding: 0.55rem 0.7rem;
+            font-size: 0.72rem;
+            font-weight: 600;
+            white-space: nowrap;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--accent-blue);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn-fetch:hover { background: var(--bg-hover); border-color: var(--accent-blue); }
+        .btn-fetch:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .flow-meta {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            margin-top: 0.3rem;
+            min-height: 1em;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
         /* ── Data Panel ── */
         .data-panel {
             padding: 1.25rem;
@@ -544,52 +623,60 @@
                 <input type="date" id="sample-date">
             </div>
 
+            <!-- McAlpine Flow with auto-fetch -->
             <div class="form-group">
-                <label>Sample Location</label>
-                <select id="sample-location">
-                    <option value="">— Select —</option>
-                    <option value="Westport">Westport</option>
-                    <option value="Zorn">Zorn</option>
-                </select>
-            </div>
-
-            <hr class="section-divider">
-
-            <div class="form-row">
-                <div class="form-group">
-                    <label>McAlpine Flow <span class="unit">(kcfs)</span></label>
+                <label>McAlpine Flow <span class="unit">(kcfs)</span></label>
+                <div class="flow-input-row">
                     <input type="number" id="mcalpine-flow" step="0.1" min="0" placeholder="e.g. 120.5">
+                    <button class="btn btn-fetch" id="fetch-flow-btn" onclick="fetchMcAlpineFlow()" title="Fetch current flow from USGS">
+                        <span id="fetch-flow-label">⟳ USGS</span>
+                    </button>
                 </div>
-                <div class="form-group">
-                    <label>PAC Dosage <span class="unit">(#/MG)</span></label>
-                    <input type="number" id="pac-dosage" step="0.1" min="0" placeholder="e.g. 5.0">
-                </div>
+                <div class="flow-meta" id="flow-meta"></div>
             </div>
 
             <hr class="section-divider">
 
-            <div class="compound-header"><span class="compound-dot pfoa"></span> PFOA</div>
-            <div class="form-row">
+            <!-- Sample Location Selector -->
+            <h2 style="margin-bottom:0.5rem;">Sample Location</h2>
+            <div class="location-toggle">
+                <button class="loc-toggle-btn" id="loc-btn-Westport" onclick="selectLocation('Westport')">Westport</button>
+                <button class="loc-toggle-btn" id="loc-btn-Zorn" onclick="selectLocation('Zorn')">Zorn</button>
+            </div>
+
+            <!-- Westport Results -->
+            <div class="location-fields" id="fields-Westport" style="display:none;">
+                <div class="loc-fields-header westport">Westport Results</div>
                 <div class="form-group">
-                    <label>Westport <span class="unit">(ng/L)</span></label>
+                    <label><span class="compound-dot pfoa"></span> PFOA <span class="unit">(ng/L)</span></label>
                     <input type="number" id="pfoa-westport" step="0.01" min="0" placeholder="ng/L">
                 </div>
                 <div class="form-group">
-                    <label>Zorn <span class="unit">(ng/L)</span></label>
-                    <input type="number" id="pfoa-zorn" step="0.01" min="0" placeholder="ng/L">
+                    <label><span class="compound-dot genx"></span> GenX <span class="unit">(ng/L)</span></label>
+                    <input type="number" id="genx-westport" step="0.01" min="0" placeholder="ng/L">
                 </div>
             </div>
 
-            <div class="compound-header genx"><span class="compound-dot genx"></span> GenX</div>
-            <div class="form-row">
+            <!-- Zorn Results -->
+            <div class="location-fields" id="fields-Zorn" style="display:none;">
+                <div class="loc-fields-header zorn">Zorn Results</div>
                 <div class="form-group">
-                    <label>Westport <span class="unit">(ng/L)</span></label>
-                    <input type="number" id="genx-westport" step="0.01" min="0" placeholder="ng/L">
+                    <label><span class="compound-dot pfoa"></span> PFOA <span class="unit">(ng/L)</span></label>
+                    <input type="number" id="pfoa-zorn" step="0.01" min="0" placeholder="ng/L">
                 </div>
                 <div class="form-group">
-                    <label>Zorn <span class="unit">(ng/L)</span></label>
+                    <label><span class="compound-dot genx"></span> GenX <span class="unit">(ng/L)</span></label>
                     <input type="number" id="genx-zorn" step="0.01" min="0" placeholder="ng/L">
                 </div>
+            </div>
+
+            <hr class="section-divider">
+
+            <!-- Treatment Response -->
+            <h2>Treatment Response</h2>
+            <div class="form-group">
+                <label>PAC Dosage <span class="unit">(#/MG)</span></label>
+                <input type="number" id="pac-dosage" step="0.1" min="0" placeholder="e.g. 5.0">
             </div>
 
             <button class="submit-btn" id="submit-btn" onclick="submitRecord()">Save Record</button>
@@ -661,12 +748,17 @@ const MRL     = 2;
 const WARNING = 3;
 const MCL     = 4;
 
+// USGS McAlpine gauge (Ohio River at Louisville)
+const USGS_SITE = '03294500';
+const USGS_PARAM = '00060'; // Discharge in cfs
+
 // ════════════════════════════════════════════════
 //  INIT
 // ════════════════════════════════════════════════
 let db;
 let records = [];
 let chart = null;
+let selectedLocation = null;
 
 function initSupabase() {
     db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
@@ -696,6 +788,78 @@ function setDefaultDate() {
 }
 
 // ════════════════════════════════════════════════
+//  LOCATION TOGGLE
+// ════════════════════════════════════════════════
+function selectLocation(loc) {
+    // Toggle: clicking active location deselects it
+    if (selectedLocation === loc) {
+        selectedLocation = null;
+        document.getElementById('loc-btn-Westport').className = 'loc-toggle-btn';
+        document.getElementById('loc-btn-Zorn').className = 'loc-toggle-btn';
+        document.getElementById('fields-Westport').style.display = 'none';
+        document.getElementById('fields-Zorn').style.display = 'none';
+        return;
+    }
+
+    selectedLocation = loc;
+
+    // Update button states
+    document.getElementById('loc-btn-Westport').className = 'loc-toggle-btn' + (loc === 'Westport' ? ' active-westport' : '');
+    document.getElementById('loc-btn-Zorn').className = 'loc-toggle-btn' + (loc === 'Zorn' ? ' active-zorn' : '');
+
+    // Show/hide field groups
+    document.getElementById('fields-Westport').style.display = loc === 'Westport' ? 'block' : 'none';
+    document.getElementById('fields-Zorn').style.display = loc === 'Zorn' ? 'block' : 'none';
+}
+
+// ════════════════════════════════════════════════
+//  USGS FLOW AUTO-FETCH
+// ════════════════════════════════════════════════
+async function fetchMcAlpineFlow() {
+    const btn = document.getElementById('fetch-flow-btn');
+    const label = document.getElementById('fetch-flow-label');
+    const meta = document.getElementById('flow-meta');
+
+    btn.disabled = true;
+    label.textContent = '…';
+    meta.textContent = '';
+
+    try {
+        const url = `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${USGS_SITE}&parameterCd=${USGS_PARAM}&period=P1D`;
+        const resp = await fetch(url);
+        if (!resp.ok) throw new Error(`USGS returned ${resp.status}`);
+
+        const data = await resp.json();
+        const ts = data.value?.timeSeries?.[0];
+        if (!ts) throw new Error('No discharge data returned');
+
+        const values = ts.values?.[0]?.value;
+        if (!values || values.length === 0) throw new Error('No recent values');
+
+        // Get most recent value
+        const latest = values[values.length - 1];
+        const cfs = parseFloat(latest.value);
+        const kcfs = (cfs / 1000).toFixed(1);
+
+        document.getElementById('mcalpine-flow').value = kcfs;
+
+        // Show timestamp
+        const dt = new Date(latest.dateTime);
+        const timeStr = dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        meta.textContent = `USGS 03294500 · ${timeStr} · ${Number(cfs).toLocaleString()} cfs`;
+
+    } catch (err) {
+        console.error('USGS fetch error:', err);
+        meta.textContent = 'Could not reach USGS — enter manually';
+        meta.style.color = 'var(--color-warning)';
+        setTimeout(() => { meta.style.color = ''; }, 4000);
+    }
+
+    btn.disabled = false;
+    label.textContent = '⟳ USGS';
+}
+
+// ════════════════════════════════════════════════
 //  DATA OPERATIONS
 // ════════════════════════════════════════════════
 async function loadData() {
@@ -721,7 +885,7 @@ async function submitRecord() {
     btn.innerHTML = '<span class="spinner"></span>';
 
     const date     = document.getElementById('sample-date').value;
-    const location = document.getElementById('sample-location').value;
+    const location = selectedLocation;
     const flow     = parseFloat(document.getElementById('mcalpine-flow').value) || null;
     const pac      = parseFloat(document.getElementById('pac-dosage').value) || null;
 
@@ -731,7 +895,7 @@ async function submitRecord() {
         return;
     }
 
-    // Determine which compound values to pull based on selected location
+    // Pull compound values from the active location fields
     let pfoa_val = null;
     let genx_val = null;
 
@@ -1036,8 +1200,15 @@ function exportCSV() {
 //  HELPERS
 // ════════════════════════════════════════════════
 function clearForm() {
-    document.getElementById('sample-location').value = '';
+    // Reset location toggle
+    selectedLocation = null;
+    document.getElementById('loc-btn-Westport').className = 'loc-toggle-btn';
+    document.getElementById('loc-btn-Zorn').className = 'loc-toggle-btn';
+    document.getElementById('fields-Westport').style.display = 'none';
+    document.getElementById('fields-Zorn').style.display = 'none';
+
     document.getElementById('mcalpine-flow').value = '';
+    document.getElementById('flow-meta').textContent = '';
     document.getElementById('pac-dosage').value = '';
     document.getElementById('pfoa-westport').value = '';
     document.getElementById('pfoa-zorn').value = '';
