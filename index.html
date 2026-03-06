@@ -478,7 +478,7 @@
             border: 1px solid var(--border);
             border-radius: var(--radius);
             padding: 1rem;
-            height: 420px;
+            height: 460px;
             position: relative;
         }
 
@@ -819,38 +819,61 @@ async function fetchMcAlpineFlow() {
     const btn = document.getElementById('fetch-flow-btn');
     const label = document.getElementById('fetch-flow-label');
     const meta = document.getElementById('flow-meta');
+    const sampleDate = document.getElementById('sample-date').value;
 
     btn.disabled = true;
     label.textContent = '…';
     meta.textContent = '';
 
+    if (!sampleDate) {
+        meta.textContent = 'Select a sample date first';
+        meta.style.color = 'var(--color-warning)';
+        setTimeout(() => { meta.style.color = ''; }, 4000);
+        btn.disabled = false;
+        label.textContent = '⟳ USGS';
+        return;
+    }
+
     try {
-        const url = `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${USGS_SITE}&parameterCd=${USGS_PARAM}&period=P1D`;
-        const resp = await fetch(url);
-        if (!resp.ok) throw new Error(`USGS returned ${resp.status}`);
+        const today = new Date().toISOString().split('T')[0];
+        let url, cfs, timeLabel;
 
-        const data = await resp.json();
-        const ts = data.value?.timeSeries?.[0];
-        if (!ts) throw new Error('No discharge data returned');
+        if (sampleDate === today) {
+            // Today: use instantaneous values for most recent reading
+            url = `https://waterservices.usgs.gov/nwis/iv/?format=json&sites=${USGS_SITE}&parameterCd=${USGS_PARAM}&period=P1D`;
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`USGS returned ${resp.status}`);
+            const data = await resp.json();
+            const ts = data.value?.timeSeries?.[0];
+            if (!ts) throw new Error('No discharge data returned');
+            const values = ts.values?.[0]?.value;
+            if (!values || values.length === 0) throw new Error('No recent values');
+            const latest = values[values.length - 1];
+            cfs = parseFloat(latest.value);
+            const dt = new Date(latest.dateTime);
+            timeLabel = dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+        } else {
+            // Historical: use daily values (mean daily discharge)
+            url = `https://waterservices.usgs.gov/nwis/dv/?format=json&sites=${USGS_SITE}&parameterCd=${USGS_PARAM}&startDT=${sampleDate}&endDT=${sampleDate}`;
+            const resp = await fetch(url);
+            if (!resp.ok) throw new Error(`USGS returned ${resp.status}`);
+            const data = await resp.json();
+            const ts = data.value?.timeSeries?.[0];
+            if (!ts) throw new Error('No daily data for this date');
+            const values = ts.values?.[0]?.value;
+            if (!values || values.length === 0) throw new Error('No daily value available — data may not be approved yet');
+            cfs = parseFloat(values[0].value);
+            const parts = sampleDate.split('-');
+            timeLabel = `${parts[1]}/${parts[2]}/${parts[0]} (daily mean)`;
+        }
 
-        const values = ts.values?.[0]?.value;
-        if (!values || values.length === 0) throw new Error('No recent values');
-
-        // Get most recent value
-        const latest = values[values.length - 1];
-        const cfs = parseFloat(latest.value);
         const kcfs = (cfs / 1000).toFixed(1);
-
         document.getElementById('mcalpine-flow').value = kcfs;
-
-        // Show timestamp
-        const dt = new Date(latest.dateTime);
-        const timeStr = dt.toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-        meta.textContent = `USGS 03294500 · ${timeStr} · ${Number(cfs).toLocaleString()} cfs`;
+        meta.textContent = `USGS 03294500 · ${timeLabel} · ${Number(cfs).toLocaleString()} cfs`;
 
     } catch (err) {
         console.error('USGS fetch error:', err);
-        meta.textContent = 'Could not reach USGS — enter manually';
+        meta.textContent = err.message.includes('not be approved') ? err.message : 'Could not reach USGS — enter manually';
         meta.style.color = 'var(--color-warning)';
         setTimeout(() => { meta.style.color = ''; }, 4000);
     }
@@ -1013,8 +1036,34 @@ function renderChart() {
 
     const datasets = [];
 
+    // ── McAlpine Flow (bar, secondary y-axis) ──
+    // Deduplicate by date — same flow applies to both locations on a given date
+    const flowByDate = {};
+    sorted.forEach(r => {
+        if (r.mcalpine_flow_kcfs != null && !flowByDate[r.sample_date]) {
+            flowByDate[r.sample_date] = r.mcalpine_flow_kcfs;
+        }
+    });
+    const flowData = Object.entries(flowByDate).map(([date, val]) => ({ x: date, y: val }));
+
+    if (flowData.length) {
+        datasets.push({
+            label: 'McAlpine Flow (kcfs)',
+            data: flowData,
+            type: 'bar',
+            yAxisID: 'yFlow',
+            backgroundColor: 'rgba(100, 116, 139, 0.18)',
+            borderColor: 'rgba(100, 116, 139, 0.35)',
+            borderWidth: 1,
+            borderRadius: 3,
+            barPercentage: 0.5,
+            categoryPercentage: 0.8,
+            order: 2, // draw behind lines
+        });
+    }
+
+    // ── PFAS concentration lines (primary y-axis) ──
     if (locFilter === 'all') {
-        // Separate datasets for each location
         const westport = sorted.filter(r => r.location === 'Westport' && r[field] != null);
         const zorn = sorted.filter(r => r.location === 'Zorn' && r[field] != null);
 
@@ -1022,6 +1071,7 @@ function renderChart() {
             datasets.push({
                 label: `${compoundLabel} — Westport`,
                 data: westport.map(r => ({ x: r.sample_date, y: r[field] })),
+                yAxisID: 'y',
                 borderColor: '#818cf8',
                 backgroundColor: 'rgba(129,140,248,0.15)',
                 pointBackgroundColor: '#818cf8',
@@ -1029,12 +1079,14 @@ function renderChart() {
                 pointRadius: 5,
                 pointHoverRadius: 7,
                 fill: false,
+                order: 1,
             });
         }
         if (zorn.length) {
             datasets.push({
                 label: `${compoundLabel} — Zorn`,
                 data: zorn.map(r => ({ x: r.sample_date, y: r[field] })),
+                yAxisID: 'y',
                 borderColor: '#2dd4bf',
                 backgroundColor: 'rgba(45,212,191,0.15)',
                 pointBackgroundColor: '#2dd4bf',
@@ -1042,6 +1094,7 @@ function renderChart() {
                 pointRadius: 5,
                 pointHoverRadius: 7,
                 fill: false,
+                order: 1,
             });
         }
     } else {
@@ -1050,6 +1103,7 @@ function renderChart() {
             datasets.push({
                 label: `${compoundLabel} — ${locFilter}`,
                 data: filtered.map(r => ({ x: r.sample_date, y: r[field] })),
+                yAxisID: 'y',
                 borderColor: compoundColor,
                 backgroundColor: compoundColor + '26',
                 pointBackgroundColor: compoundColor,
@@ -1057,14 +1111,18 @@ function renderChart() {
                 pointRadius: 5,
                 pointHoverRadius: 7,
                 fill: false,
+                order: 1,
             });
         }
     }
 
-    // Determine y-axis max
+    // Determine y-axis max for concentration
     let allVals = [];
-    datasets.forEach(ds => ds.data.forEach(pt => allVals.push(pt.y)));
+    datasets.filter(ds => ds.yAxisID === 'y').forEach(ds => ds.data.forEach(pt => allVals.push(pt.y)));
     const maxVal = allVals.length ? Math.max(...allVals, MCL + 1) : MCL + 2;
+
+    // Determine y-axis max for flow
+    const maxFlow = flowData.length ? Math.max(...flowData.map(pt => pt.y)) : 100;
 
     if (chart) chart.destroy();
 
@@ -1085,11 +1143,20 @@ function renderChart() {
                     title: { display: true, text: 'Sample Date', color: '#8b9dc3', font: { family: 'DM Sans', size: 12, weight: 600 } }
                 },
                 y: {
+                    position: 'left',
                     min: 0,
                     max: Math.ceil(maxVal),
                     grid: { color: 'rgba(30,58,95,0.3)' },
                     ticks: { color: '#5a6d8a', font: { family: 'JetBrains Mono', size: 11 } },
                     title: { display: true, text: 'Concentration (ng/L)', color: '#8b9dc3', font: { family: 'DM Sans', size: 12, weight: 600 } }
+                },
+                yFlow: {
+                    position: 'right',
+                    min: 0,
+                    max: Math.ceil(maxFlow * 1.2),
+                    grid: { drawOnChartArea: false },
+                    ticks: { color: '#64748b', font: { family: 'JetBrains Mono', size: 11 } },
+                    title: { display: true, text: 'McAlpine Flow (kcfs)', color: '#64748b', font: { family: 'DM Sans', size: 12, weight: 600 } }
                 }
             },
             plugins: {
@@ -1099,17 +1166,17 @@ function renderChart() {
                 annotation: {
                     annotations: {
                         mrlLine: {
-                            type: 'line', yMin: MRL, yMax: MRL,
+                            type: 'line', yMin: MRL, yMax: MRL, yScaleID: 'y',
                             borderColor: '#10b981', borderWidth: 1, borderDash: [6, 4],
                             label: { display: true, content: 'MRL (2)', position: 'start', yAdjust: 14, color: '#10b981', backgroundColor: 'transparent', font: { size: 10, family: 'JetBrains Mono' } }
                         },
                         warningLine: {
-                            type: 'line', yMin: WARNING, yMax: WARNING,
+                            type: 'line', yMin: WARNING, yMax: WARNING, yScaleID: 'y',
                             borderColor: '#f59e0b', borderWidth: 1, borderDash: [6, 4],
                             label: { display: true, content: 'Warning (3)', position: 'start', yAdjust: 14, color: '#f59e0b', backgroundColor: 'transparent', font: { size: 10, family: 'JetBrains Mono' } }
                         },
                         mclLine: {
-                            type: 'line', yMin: MCL, yMax: MCL,
+                            type: 'line', yMin: MCL, yMax: MCL, yScaleID: 'y',
                             borderColor: '#ef4444', borderWidth: 2, borderDash: [6, 4],
                             label: { display: true, content: 'EPA MCL (4)', position: 'start', yAdjust: 14, color: '#ef4444', backgroundColor: 'transparent', font: { size: 10, family: 'JetBrains Mono' } }
                         }
@@ -1123,6 +1190,9 @@ function renderChart() {
                     bodyFont: { family: 'JetBrains Mono' },
                     callbacks: {
                         label: function(ctx) {
+                            if (ctx.dataset.yAxisID === 'yFlow') {
+                                return `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(1)} kcfs`;
+                            }
                             return `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} ng/L`;
                         }
                     }
@@ -1130,7 +1200,7 @@ function renderChart() {
             }
         },
         plugins: [{
-            // Draw threshold fill zones
+            // Draw threshold fill zones (only on primary y-axis)
             beforeDraw(chart) {
                 const { ctx, chartArea, scales } = chart;
                 if (!chartArea) return;
