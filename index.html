@@ -664,12 +664,12 @@ const MCL     = 4;
 // ════════════════════════════════════════════════
 //  INIT
 // ════════════════════════════════════════════════
-let supabase;
+let db;
 let records = [];
 let chart = null;
 
 function initSupabase() {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    db = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 }
 
 // ── PIN ──
@@ -700,7 +700,7 @@ function setDefaultDate() {
 // ════════════════════════════════════════════════
 async function loadData() {
     try {
-        const { data, error } = await supabase
+        const { data, error } = await db
             .from(TABLE_NAME)
             .select('*')
             .order('sample_date', { ascending: false });
@@ -756,7 +756,7 @@ async function submitRecord() {
     };
 
     try {
-        const { error } = await supabase.from(TABLE_NAME).insert([record]);
+        const { error } = await db.from(TABLE_NAME).insert([record]);
         if (error) throw error;
         showStatus('Record saved.', 'success');
         clearForm();
@@ -772,7 +772,7 @@ async function submitRecord() {
 async function deleteRecord(id) {
     if (!confirm('Delete this record?')) return;
     try {
-        const { error } = await supabase.from(TABLE_NAME).delete().eq('id', id);
+        const { error } = await db.from(TABLE_NAME).delete().eq('id', id);
         if (error) throw error;
         await loadData();
     } catch (err) {
