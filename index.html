@@ -1,0 +1,1067 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PFAS Weekly Monitoring Tracker</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0f1a;
+            --bg-card: #111827;
+            --bg-input: #1a2236;
+            --bg-hover: #1e293b;
+            --border: #1e3a5f;
+            --border-light: #2a4a6f;
+            --text-primary: #e2e8f0;
+            --text-secondary: #8b9dc3;
+            --text-muted: #5a6d8a;
+            --accent-blue: #3b82f6;
+            --accent-blue-dim: #1e40af;
+            --color-safe: #10b981;
+            --color-safe-bg: rgba(16, 185, 129, 0.1);
+            --color-warning: #f59e0b;
+            --color-warning-bg: rgba(245, 158, 11, 0.1);
+            --color-danger: #ef4444;
+            --color-danger-bg: rgba(239, 68, 68, 0.1);
+            --color-pfoa: #6366f1;
+            --color-genx: #14b8a6;
+            --radius: 8px;
+            --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 1px 2px rgba(0,0,0,0.2);
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            line-height: 1.5;
+        }
+
+        /* ── PIN Screen ── */
+        #pin-screen {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+
+        .pin-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 380px;
+            text-align: center;
+            box-shadow: var(--shadow);
+        }
+
+        .pin-box h1 {
+            font-size: 1.1rem;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+        }
+
+        .pin-box .app-title {
+            font-size: 1.6rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+        }
+
+        .pin-box input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 1.25rem;
+            text-align: center;
+            letter-spacing: 0.3em;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .pin-box input:focus { border-color: var(--accent-blue); }
+
+        .pin-box button {
+            width: 100%;
+            margin-top: 1rem;
+            padding: 0.75rem;
+            background: var(--accent-blue);
+            color: #fff;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.95rem;
+            font-weight: 600;
+            border: none;
+            border-radius: var(--radius);
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .pin-box button:hover { background: var(--accent-blue-dim); }
+
+        .pin-error {
+            color: var(--color-danger);
+            font-size: 0.85rem;
+            margin-top: 0.75rem;
+            min-height: 1.2em;
+        }
+
+        /* ── Main App ── */
+        #app { display: none; }
+
+        .app-header {
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .header-left h1 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .header-left .badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 500;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            color: var(--text-muted);
+            letter-spacing: 0.04em;
+        }
+
+        .header-actions { display: flex; gap: 0.5rem; align-items: center; }
+
+        .btn {
+            padding: 0.5rem 1rem;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.8rem;
+            font-weight: 600;
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            background: var(--bg-input);
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn:hover { background: var(--bg-hover); border-color: var(--border-light); color: var(--text-primary); }
+        .btn-primary { background: var(--accent-blue); border-color: var(--accent-blue); color: #fff; }
+        .btn-primary:hover { background: var(--accent-blue-dim); }
+
+        /* ── Threshold Legend ── */
+        .threshold-bar {
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            padding: 0.6rem 1.5rem;
+            background: var(--bg-card);
+            border-bottom: 1px solid var(--border);
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+        }
+
+        .threshold-bar .th-item {
+            display: flex;
+            align-items: center;
+            gap: 0.35rem;
+        }
+
+        .th-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .th-dot.safe { background: var(--color-safe); }
+        .th-dot.warning { background: var(--color-warning); }
+        .th-dot.danger { background: var(--color-danger); }
+
+        /* ── Layout ── */
+        .main-content {
+            display: grid;
+            grid-template-columns: 340px 1fr;
+            min-height: calc(100vh - 100px);
+        }
+
+        @media (max-width: 900px) {
+            .main-content { grid-template-columns: 1fr; }
+        }
+
+        /* ── Entry Panel ── */
+        .entry-panel {
+            background: var(--bg-card);
+            border-right: 1px solid var(--border);
+            padding: 1.25rem;
+            overflow-y: auto;
+        }
+
+        .entry-panel h2 {
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: var(--text-muted);
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 0.9rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-bottom: 0.3rem;
+        }
+
+        .form-group label .unit {
+            color: var(--text-muted);
+            font-weight: 400;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 0.55rem 0.75rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.85rem;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .form-group input:focus, .form-group select:focus {
+            border-color: var(--accent-blue);
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 0.75rem;
+        }
+
+        .section-divider {
+            border: none;
+            border-top: 1px solid var(--border);
+            margin: 1rem 0;
+        }
+
+        .compound-header {
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: var(--color-pfoa);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            margin-bottom: 0.6rem;
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .compound-header.genx { color: var(--color-genx); }
+
+        .compound-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .compound-dot.pfoa { background: var(--color-pfoa); }
+        .compound-dot.genx { background: var(--color-genx); }
+
+        .submit-btn {
+            width: 100%;
+            padding: 0.7rem;
+            margin-top: 0.5rem;
+            background: var(--accent-blue);
+            border: none;
+            border-radius: var(--radius);
+            color: #fff;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .submit-btn:hover { background: var(--accent-blue-dim); }
+        .submit-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+        .status-msg {
+            font-size: 0.8rem;
+            margin-top: 0.5rem;
+            min-height: 1.2em;
+            text-align: center;
+        }
+
+        .status-msg.success { color: var(--color-safe); }
+        .status-msg.error { color: var(--color-danger); }
+
+        /* ── Data Panel ── */
+        .data-panel {
+            padding: 1.25rem;
+            overflow-y: auto;
+        }
+
+        /* ── Tabs ── */
+        .tab-bar {
+            display: flex;
+            gap: 0;
+            margin-bottom: 1.25rem;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .tab-btn {
+            padding: 0.6rem 1.25rem;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.82rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            background: none;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .tab-btn:hover { color: var(--text-secondary); }
+        .tab-btn.active { color: var(--accent-blue); border-bottom-color: var(--accent-blue); }
+
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* ── Chart ── */
+        .chart-controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .chart-controls label {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+
+        .chart-controls select {
+            padding: 0.4rem 0.6rem;
+            background: var(--bg-input);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.8rem;
+            outline: none;
+        }
+
+        .chart-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1rem;
+            height: 420px;
+            position: relative;
+        }
+
+        /* ── Table ── */
+        .table-wrap {
+            background: var(--bg-card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.8rem;
+        }
+
+        thead th {
+            padding: 0.65rem 0.75rem;
+            text-align: left;
+            font-weight: 600;
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+            background: var(--bg-input);
+            border-bottom: 1px solid var(--border);
+            white-space: nowrap;
+        }
+
+        tbody td {
+            padding: 0.55rem 0.75rem;
+            border-bottom: 1px solid rgba(30,58,95,0.4);
+            color: var(--text-primary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            white-space: nowrap;
+        }
+
+        tbody tr:hover { background: var(--bg-hover); }
+
+        .cell-safe { color: var(--color-safe); }
+        .cell-warning { color: var(--color-warning); background: var(--color-warning-bg); }
+        .cell-danger { color: var(--color-danger); background: var(--color-danger-bg); font-weight: 600; }
+
+        .loc-badge {
+            display: inline-block;
+            padding: 0.15rem 0.45rem;
+            border-radius: 4px;
+            font-family: 'DM Sans', sans-serif;
+            font-size: 0.72rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+        }
+
+        .loc-badge.westport { background: rgba(99,102,241,0.15); color: #818cf8; }
+        .loc-badge.zorn { background: rgba(20,184,166,0.15); color: #2dd4bf; }
+
+        .delete-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.9rem;
+            padding: 0.2rem 0.4rem;
+            border-radius: 4px;
+            transition: all 0.15s;
+        }
+
+        .delete-btn:hover { color: var(--color-danger); background: var(--color-danger-bg); }
+
+        .no-data {
+            padding: 3rem;
+            text-align: center;
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* ── Loading ── */
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--border);
+            border-top-color: var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* ── Responsive ── */
+        @media (max-width: 600px) {
+            .app-header { padding: 0.75rem 1rem; }
+            .entry-panel { padding: 1rem; }
+            .data-panel { padding: 1rem; }
+            .form-row { grid-template-columns: 1fr; }
+            .threshold-bar { padding: 0.5rem 1rem; gap: 0.75rem; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ── PIN Authentication ── -->
+<div id="pin-screen">
+    <div class="pin-box">
+        <h1>Louisville Water Co.</h1>
+        <div class="app-title">PFAS Tracker</div>
+        <input type="password" id="pin-input" maxlength="6" placeholder="Enter PIN" autofocus>
+        <button onclick="verifyPin()">Unlock</button>
+        <div class="pin-error" id="pin-error"></div>
+    </div>
+</div>
+
+<!-- ── Main Application ── -->
+<div id="app">
+    <header class="app-header">
+        <div class="header-left">
+            <h1>PFAS Weekly Monitoring</h1>
+            <span class="badge">PFOA &amp; GenX</span>
+        </div>
+        <div class="header-actions">
+            <button class="btn" onclick="exportCSV()">Export CSV</button>
+            <button class="btn" onclick="refreshData()">Refresh</button>
+        </div>
+    </header>
+
+    <div class="threshold-bar">
+        <span style="color:var(--text-muted); font-weight:600;">Thresholds (ng/L):</span>
+        <span class="th-item"><span class="th-dot safe"></span> &lt; MRL (2)</span>
+        <span class="th-item"><span class="th-dot warning"></span> Warning (3)</span>
+        <span class="th-item"><span class="th-dot danger"></span> MCL (4)</span>
+    </div>
+
+    <div class="main-content">
+        <!-- ── Entry Panel ── -->
+        <div class="entry-panel">
+            <h2>New Monitoring Event</h2>
+
+            <div class="form-group">
+                <label>Sample Date</label>
+                <input type="date" id="sample-date">
+            </div>
+
+            <div class="form-group">
+                <label>Sample Location</label>
+                <select id="sample-location">
+                    <option value="">— Select —</option>
+                    <option value="Westport">Westport</option>
+                    <option value="Zorn">Zorn</option>
+                </select>
+            </div>
+
+            <hr class="section-divider">
+
+            <div class="form-row">
+                <div class="form-group">
+                    <label>McAlpine Flow <span class="unit">(kcfs)</span></label>
+                    <input type="number" id="mcalpine-flow" step="0.1" min="0" placeholder="e.g. 120.5">
+                </div>
+                <div class="form-group">
+                    <label>PAC Dosage <span class="unit">(#/MG)</span></label>
+                    <input type="number" id="pac-dosage" step="0.1" min="0" placeholder="e.g. 5.0">
+                </div>
+            </div>
+
+            <hr class="section-divider">
+
+            <div class="compound-header"><span class="compound-dot pfoa"></span> PFOA</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Westport <span class="unit">(ng/L)</span></label>
+                    <input type="number" id="pfoa-westport" step="0.01" min="0" placeholder="ng/L">
+                </div>
+                <div class="form-group">
+                    <label>Zorn <span class="unit">(ng/L)</span></label>
+                    <input type="number" id="pfoa-zorn" step="0.01" min="0" placeholder="ng/L">
+                </div>
+            </div>
+
+            <div class="compound-header genx"><span class="compound-dot genx"></span> GenX</div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>Westport <span class="unit">(ng/L)</span></label>
+                    <input type="number" id="genx-westport" step="0.01" min="0" placeholder="ng/L">
+                </div>
+                <div class="form-group">
+                    <label>Zorn <span class="unit">(ng/L)</span></label>
+                    <input type="number" id="genx-zorn" step="0.01" min="0" placeholder="ng/L">
+                </div>
+            </div>
+
+            <button class="submit-btn" id="submit-btn" onclick="submitRecord()">Save Record</button>
+            <div class="status-msg" id="status-msg"></div>
+        </div>
+
+        <!-- ── Data Panel ── -->
+        <div class="data-panel">
+            <div class="tab-bar">
+                <button class="tab-btn active" data-tab="chart" onclick="switchTab('chart')">Chart</button>
+                <button class="tab-btn" data-tab="table" onclick="switchTab('table')">Table</button>
+            </div>
+
+            <!-- Chart Tab -->
+            <div class="tab-content active" id="tab-chart">
+                <div class="chart-controls">
+                    <label>Compound:</label>
+                    <select id="chart-compound" onchange="renderChart()">
+                        <option value="pfoa">PFOA</option>
+                        <option value="genx">GenX</option>
+                    </select>
+                    <label>Location:</label>
+                    <select id="chart-location" onchange="renderChart()">
+                        <option value="all">All</option>
+                        <option value="Westport">Westport</option>
+                        <option value="Zorn">Zorn</option>
+                    </select>
+                </div>
+                <div class="chart-container">
+                    <canvas id="pfas-chart"></canvas>
+                </div>
+            </div>
+
+            <!-- Table Tab -->
+            <div class="tab-content" id="tab-table">
+                <div class="table-wrap">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Location</th>
+                                <th>PFOA (ng/L)</th>
+                                <th>GenX (ng/L)</th>
+                                <th>Flow (kcfs)</th>
+                                <th>PAC (#/MG)</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="data-tbody"></tbody>
+                    </table>
+                    <div class="no-data" id="no-data" style="display:none;">No records yet. Add a monitoring event to get started.</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ════════════════════════════════════════════════
+//  CONFIGURATION — Update these for your project
+// ════════════════════════════════════════════════
+const SUPABASE_URL  = 'https://synmfjinzgwpginntwvt.supabase.co';
+const SUPABASE_KEY  = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN5bm1mamluemd3cGdpbm50d3Z0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMjQxNjksImV4cCI6MjA4NzgwMDE2OX0.2HBGc2Cakur84BWG-BpnyWOqih9RH6EWVzwOVshcYyI';
+const APP_PIN       = '3018';  // Change this
+const TABLE_NAME    = 'pfas_monitoring';
+
+// Thresholds (ng/L)
+const MRL     = 2;
+const WARNING = 3;
+const MCL     = 4;
+
+// ════════════════════════════════════════════════
+//  INIT
+// ════════════════════════════════════════════════
+let supabase;
+let records = [];
+let chart = null;
+
+function initSupabase() {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+}
+
+// ── PIN ──
+function verifyPin() {
+    const pin = document.getElementById('pin-input').value;
+    if (pin === APP_PIN) {
+        document.getElementById('pin-screen').style.display = 'none';
+        document.getElementById('app').style.display = 'block';
+        initSupabase();
+        setDefaultDate();
+        loadData();
+    } else {
+        document.getElementById('pin-error').textContent = 'Invalid PIN';
+    }
+}
+
+document.getElementById('pin-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') verifyPin();
+});
+
+function setDefaultDate() {
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('sample-date').value = today;
+}
+
+// ════════════════════════════════════════════════
+//  DATA OPERATIONS
+// ════════════════════════════════════════════════
+async function loadData() {
+    try {
+        const { data, error } = await supabase
+            .from(TABLE_NAME)
+            .select('*')
+            .order('sample_date', { ascending: false });
+
+        if (error) throw error;
+        records = data || [];
+        renderTable();
+        renderChart();
+    } catch (err) {
+        console.error('Load error:', err);
+        showStatus('Failed to load data: ' + err.message, 'error');
+    }
+}
+
+async function submitRecord() {
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>';
+
+    const date     = document.getElementById('sample-date').value;
+    const location = document.getElementById('sample-location').value;
+    const flow     = parseFloat(document.getElementById('mcalpine-flow').value) || null;
+    const pac      = parseFloat(document.getElementById('pac-dosage').value) || null;
+
+    if (!date || !location) {
+        showStatus('Date and location are required.', 'error');
+        resetBtn();
+        return;
+    }
+
+    // Determine which compound values to pull based on selected location
+    let pfoa_val = null;
+    let genx_val = null;
+
+    if (location === 'Westport') {
+        pfoa_val = parseFloat(document.getElementById('pfoa-westport').value);
+        genx_val = parseFloat(document.getElementById('genx-westport').value);
+    } else if (location === 'Zorn') {
+        pfoa_val = parseFloat(document.getElementById('pfoa-zorn').value);
+        genx_val = parseFloat(document.getElementById('genx-zorn').value);
+    }
+
+    if (isNaN(pfoa_val)) pfoa_val = null;
+    if (isNaN(genx_val)) genx_val = null;
+
+    const record = {
+        sample_date: date,
+        location: location,
+        pfoa_ngl: pfoa_val,
+        genx_ngl: genx_val,
+        mcalpine_flow_kcfs: flow,
+        pac_dosage_lbmg: pac
+    };
+
+    try {
+        const { error } = await supabase.from(TABLE_NAME).insert([record]);
+        if (error) throw error;
+        showStatus('Record saved.', 'success');
+        clearForm();
+        await loadData();
+    } catch (err) {
+        console.error('Insert error:', err);
+        showStatus('Save failed: ' + err.message, 'error');
+    }
+
+    resetBtn();
+}
+
+async function deleteRecord(id) {
+    if (!confirm('Delete this record?')) return;
+    try {
+        const { error } = await supabase.from(TABLE_NAME).delete().eq('id', id);
+        if (error) throw error;
+        await loadData();
+    } catch (err) {
+        console.error('Delete error:', err);
+        showStatus('Delete failed: ' + err.message, 'error');
+    }
+}
+
+function refreshData() { loadData(); }
+
+// ════════════════════════════════════════════════
+//  TABLE RENDERING
+// ════════════════════════════════════════════════
+function renderTable() {
+    const tbody = document.getElementById('data-tbody');
+    const noData = document.getElementById('no-data');
+
+    if (records.length === 0) {
+        tbody.innerHTML = '';
+        noData.style.display = 'block';
+        return;
+    }
+
+    noData.style.display = 'none';
+
+    tbody.innerHTML = records.map(r => {
+        const dateStr = formatDate(r.sample_date);
+        const locClass = r.location.toLowerCase();
+        return `<tr>
+            <td>${dateStr}</td>
+            <td><span class="loc-badge ${locClass}">${r.location}</span></td>
+            <td class="${thresholdClass(r.pfoa_ngl)}">${fmtVal(r.pfoa_ngl)}</td>
+            <td class="${thresholdClass(r.genx_ngl)}">${fmtVal(r.genx_ngl)}</td>
+            <td>${r.mcalpine_flow_kcfs != null ? r.mcalpine_flow_kcfs.toFixed(1) : '—'}</td>
+            <td>${r.pac_dosage_lbmg != null ? r.pac_dosage_lbmg.toFixed(1) : '—'}</td>
+            <td><button class="delete-btn" onclick="deleteRecord('${r.id}')" title="Delete">✕</button></td>
+        </tr>`;
+    }).join('');
+}
+
+function thresholdClass(val) {
+    if (val == null) return '';
+    if (val >= MCL) return 'cell-danger';
+    if (val >= WARNING) return 'cell-warning';
+    if (val < MRL) return 'cell-safe';
+    return '';
+}
+
+function fmtVal(val) {
+    if (val == null) return '—';
+    if (val < MRL) return `<${MRL}`;
+    return val.toFixed(2);
+}
+
+function formatDate(d) {
+    if (!d) return '—';
+    const parts = d.split('-');
+    return `${parts[1]}/${parts[2]}/${parts[0]}`;
+}
+
+// ════════════════════════════════════════════════
+//  CHART RENDERING
+// ════════════════════════════════════════════════
+function renderChart() {
+    const compound = document.getElementById('chart-compound').value;
+    const locFilter = document.getElementById('chart-location').value;
+
+    const field = compound === 'pfoa' ? 'pfoa_ngl' : 'genx_ngl';
+    const compoundLabel = compound === 'pfoa' ? 'PFOA' : 'GenX';
+    const compoundColor = compound === 'pfoa' ? '#6366f1' : '#14b8a6';
+
+    // Sort ascending for chart
+    const sorted = [...records].sort((a, b) => a.sample_date.localeCompare(b.sample_date));
+
+    const datasets = [];
+
+    if (locFilter === 'all') {
+        // Separate datasets for each location
+        const westport = sorted.filter(r => r.location === 'Westport' && r[field] != null);
+        const zorn = sorted.filter(r => r.location === 'Zorn' && r[field] != null);
+
+        if (westport.length) {
+            datasets.push({
+                label: `${compoundLabel} — Westport`,
+                data: westport.map(r => ({ x: r.sample_date, y: r[field] })),
+                borderColor: '#818cf8',
+                backgroundColor: 'rgba(129,140,248,0.15)',
+                pointBackgroundColor: '#818cf8',
+                tension: 0.3,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                fill: false,
+            });
+        }
+        if (zorn.length) {
+            datasets.push({
+                label: `${compoundLabel} — Zorn`,
+                data: zorn.map(r => ({ x: r.sample_date, y: r[field] })),
+                borderColor: '#2dd4bf',
+                backgroundColor: 'rgba(45,212,191,0.15)',
+                pointBackgroundColor: '#2dd4bf',
+                tension: 0.3,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                fill: false,
+            });
+        }
+    } else {
+        const filtered = sorted.filter(r => r.location === locFilter && r[field] != null);
+        if (filtered.length) {
+            datasets.push({
+                label: `${compoundLabel} — ${locFilter}`,
+                data: filtered.map(r => ({ x: r.sample_date, y: r[field] })),
+                borderColor: compoundColor,
+                backgroundColor: compoundColor + '26',
+                pointBackgroundColor: compoundColor,
+                tension: 0.3,
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                fill: false,
+            });
+        }
+    }
+
+    // Determine y-axis max
+    let allVals = [];
+    datasets.forEach(ds => ds.data.forEach(pt => allVals.push(pt.y)));
+    const maxVal = allVals.length ? Math.max(...allVals, MCL + 1) : MCL + 2;
+
+    if (chart) chart.destroy();
+
+    const ctx = document.getElementById('pfas-chart').getContext('2d');
+    chart = new Chart(ctx, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'nearest', intersect: false },
+            scales: {
+                x: {
+                    type: 'time',
+                    time: { unit: 'week', tooltipFormat: 'MMM d, yyyy' },
+                    grid: { color: 'rgba(30,58,95,0.3)' },
+                    ticks: { color: '#5a6d8a', font: { family: 'DM Sans', size: 11 } },
+                    title: { display: true, text: 'Sample Date', color: '#8b9dc3', font: { family: 'DM Sans', size: 12, weight: 600 } }
+                },
+                y: {
+                    min: 0,
+                    max: Math.ceil(maxVal),
+                    grid: { color: 'rgba(30,58,95,0.3)' },
+                    ticks: { color: '#5a6d8a', font: { family: 'JetBrains Mono', size: 11 } },
+                    title: { display: true, text: 'Concentration (ng/L)', color: '#8b9dc3', font: { family: 'DM Sans', size: 12, weight: 600 } }
+                }
+            },
+            plugins: {
+                legend: {
+                    labels: { color: '#8b9dc3', font: { family: 'DM Sans', size: 12 }, usePointStyle: true, pointStyle: 'circle' }
+                },
+                annotation: {
+                    annotations: {
+                        mrlLine: {
+                            type: 'line', yMin: MRL, yMax: MRL,
+                            borderColor: '#10b981', borderWidth: 1, borderDash: [6, 4],
+                            label: { display: true, content: 'MRL (2)', position: 'start', color: '#10b981', backgroundColor: 'transparent', font: { size: 10, family: 'JetBrains Mono' } }
+                        },
+                        warningLine: {
+                            type: 'line', yMin: WARNING, yMax: WARNING,
+                            borderColor: '#f59e0b', borderWidth: 1, borderDash: [6, 4],
+                            label: { display: true, content: 'Warning (3)', position: 'start', color: '#f59e0b', backgroundColor: 'transparent', font: { size: 10, family: 'JetBrains Mono' } }
+                        },
+                        mclLine: {
+                            type: 'line', yMin: MCL, yMax: MCL,
+                            borderColor: '#ef4444', borderWidth: 2, borderDash: [6, 4],
+                            label: { display: true, content: 'EPA MCL (4)', position: 'start', color: '#ef4444', backgroundColor: 'transparent', font: { size: 10, family: 'JetBrains Mono' } }
+                        }
+                    }
+                },
+                tooltip: {
+                    backgroundColor: '#1a2236',
+                    borderColor: '#2a4a6f',
+                    borderWidth: 1,
+                    titleFont: { family: 'DM Sans', weight: 600 },
+                    bodyFont: { family: 'JetBrains Mono' },
+                    callbacks: {
+                        label: function(ctx) {
+                            return `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)} ng/L`;
+                        }
+                    }
+                }
+            }
+        },
+        plugins: [{
+            // Draw threshold fill zones
+            beforeDraw(chart) {
+                const { ctx, chartArea, scales } = chart;
+                if (!chartArea) return;
+                const yScale = scales.y;
+
+                // Danger zone (above MCL)
+                const mclY = yScale.getPixelForValue(MCL);
+                const topY = chartArea.top;
+                if (mclY > topY) {
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(239, 68, 68, 0.05)';
+                    ctx.fillRect(chartArea.left, topY, chartArea.width, mclY - topY);
+                    ctx.restore();
+                }
+
+                // Warning zone
+                const warnY = yScale.getPixelForValue(WARNING);
+                if (warnY > mclY) {
+                    ctx.save();
+                    ctx.fillStyle = 'rgba(245, 158, 11, 0.04)';
+                    ctx.fillRect(chartArea.left, mclY, chartArea.width, warnY - mclY);
+                    ctx.restore();
+                }
+            }
+        }]
+    });
+}
+
+// ════════════════════════════════════════════════
+//  TABS
+// ════════════════════════════════════════════════
+function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.toggle('active', c.id === `tab-${tab}`));
+    if (tab === 'chart') renderChart();
+}
+
+// ════════════════════════════════════════════════
+//  CSV EXPORT
+// ════════════════════════════════════════════════
+function exportCSV() {
+    if (!records.length) return;
+
+    const headers = ['Date', 'Location', 'PFOA (ng/L)', 'GenX (ng/L)', 'McAlpine Flow (kcfs)', 'PAC Dosage (#/MG)'];
+    const rows = records.map(r => [
+        r.sample_date,
+        r.location,
+        r.pfoa_ngl ?? '',
+        r.genx_ngl ?? '',
+        r.mcalpine_flow_kcfs ?? '',
+        r.pac_dosage_lbmg ?? ''
+    ]);
+
+    let csv = headers.join(',') + '\n';
+    rows.forEach(row => { csv += row.join(',') + '\n'; });
+
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `PFAS_Monitoring_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+// ════════════════════════════════════════════════
+//  HELPERS
+// ════════════════════════════════════════════════
+function clearForm() {
+    document.getElementById('sample-location').value = '';
+    document.getElementById('mcalpine-flow').value = '';
+    document.getElementById('pac-dosage').value = '';
+    document.getElementById('pfoa-westport').value = '';
+    document.getElementById('pfoa-zorn').value = '';
+    document.getElementById('genx-westport').value = '';
+    document.getElementById('genx-zorn').value = '';
+    setDefaultDate();
+}
+
+function resetBtn() {
+    const btn = document.getElementById('submit-btn');
+    btn.disabled = false;
+    btn.textContent = 'Save Record';
+}
+
+function showStatus(msg, type) {
+    const el = document.getElementById('status-msg');
+    el.textContent = msg;
+    el.className = 'status-msg ' + type;
+    setTimeout(() => { el.textContent = ''; el.className = 'status-msg'; }, 4000);
+}
+</script>
+
+<!-- Chart.js annotation plugin for threshold lines -->
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@3.0.1"></script>
+
+</body>
+</html>
